@@ -1,0 +1,46 @@
+<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Khảo giá tài sản bảo đảm</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:1100px;margin:0 auto;padding:16px;color:#1a1a1a}
+fieldset{border:1px solid #ccd;border-radius:8px;margin-bottom:16px}
+label{display:inline-block;margin:4px 12px 4px 0}input,select,textarea{padding:5px}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid #dde;padding:5px 7px;text-align:left}th{background:#f1f3f8}
+.warn{background:#fff4d6;border:1px solid #e6b800;padding:8px 12px;border-radius:6px;margin:8px 0}
+.err{background:#fde8e8;border:1px solid #d33;padding:6px 10px;border-radius:6px;margin:6px 0}
+.box{background:#eef5ff;padding:10px 14px;border-radius:8px;margin:8px 0}.muted{color:#667}.out{color:#a00;text-decoration:line-through}
+</style>
+<h1>Khảo giá tài sản bảo đảm <small class="muted">(bản mẫu – Gia Lai / Bình Định cũ)</small></h1>
+<p class="muted">Kết quả chỉ để <b>tham khảo</b>, dựa trên giá <b>rao bán</b>; không thay thế thẩm định giá của cán bộ có thẩm quyền.</p>
+<form method="post" action="/search"><fieldset><legend>Tài sản cần khảo giá</legend>
+<label>Xã/Phường (cũ hoặc mới) <input name="xa" value="{{ q.xa if q else '' }}"></label>
+<label>Huyện/TP (cũ hoặc mới) <input name="huyen" value="{{ q.huyen if q else '' }}"></label>
+<label>Tỉnh <input name="tinh" value="{{ q.tinh if q else 'Gia Lai' }}"></label><br>
+<label>Diện tích m² <input name="area" type="number" step="any" value="{{ q.area if q else '' }}"></label>
+<label>Loại đất <select name="land_type">{% for k,v in land.items() %}<option value="{{k}}" {{'selected' if q and q.land_type==k}}>{{v}}</option>{% endfor %}</select></label>
+<label>Chiết khấu thương lượng % <input name="discount" type="number" step="any" value="{{ q.discount if q else 10 }}" style="width:60px"></label>
+<label>Khớp tối thiểu <select name="need"><option value="1">1 cấp địa danh</option><option value="2" {{'selected' if q and q.need==2}}>2 cấp</option></select></label><br>
+<label><input type="checkbox" name="live" value="1"> Thu thập mới từ nguồn trực tuyến ({{ sources|join(', ') }}) trước khi tính</label>
+<button>Khảo giá</button>
+</fieldset></form>
+
+{% for e in errors %}<div class="err">{{ e }}</div>{% endfor %}
+{% if res %}
+{% if aliases %}<p class="muted">Tên địa danh được tìm (gồm tên cũ/mới theo bảng ánh xạ): {% for a in aliases %}{{ a|join(' / ') }}{{ '; ' if not loop.last }}{% endfor %}</p>{% endif %}
+{% if res.warning %}<div class="warn">{{ res.warning }}</div>{% endif %}
+{% if res.median %}<div class="box">
+<b>Giá/m² trung vị: {{ res.median|vnd }} đ</b> · Khoảng P25–P75: {{ res.p25|vnd }} – {{ res.p75|vnd }} đ/m²<br>
+<b>Khoảng giá tham khảo sau chiết khấu {{ q.discount }}%: {{ res.low|vnd }} – {{ res.high|vnd }} đ/m²</b>
+{% if q.area %}→ ước tính thửa {{ q.area|vnd }} m²: {{ (res.low*q.area)|vnd }} – {{ (res.high*q.area)|vnd }} đ{% endif %}<br>
+<span class="muted">Dùng {{ res.n_used }} / {{ res.n_total }} tin (loại {{ res.outliers|length }} tin ngoại lai).</span>
+<a href="/export.xlsx?xa={{q.xa}}&huyen={{q.huyen}}&tinh={{q.tinh}}&area={{q.area}}&land_type={{q.land_type}}&discount={{q.discount}}&need={{q.need}}">Tải Excel</a></div>{% endif %}
+<table><tr><th>Nguồn</th><th>Tiêu đề / link</th><th>Địa chỉ</th><th>Loại</th><th>m²</th><th>MT</th><th>Giá</th><th>Giá/m²</th><th>Thu thập</th></tr>
+{% for l in items %}{% set o = l in res.outliers %}<tr class="{{ 'out' if o }}"><td>{{l.source}}</td>
+<td>{% if l.url %}<a href="{{l.url}}" target="_blank" rel="noopener">{{ l.title or l.url }}</a>{% else %}{{ l.title }}{% endif %}</td>
+<td>{{l.address}}</td><td>{{l.land_type}}</td><td>{{l.area_m2|vnd}}</td><td>{{l.frontage_m or '-'}}</td>
+<td>{{l.price_vnd|vnd}}</td><td>{{l.price_per_m2|vnd}}</td><td>{{l.fetched_at}}</td></tr>{% endfor %}</table>
+{% endif %}
+
+<form method="post" action="/paste"><fieldset><legend>Thêm tin thủ công (dán nội dung tin Facebook/Zalo/web)</legend>
+<label>Link <input name="url" size="40"></label><label>Địa chỉ <input name="address" size="40"></label><br>
+<textarea name="text" rows="5" cols="90" placeholder="Dán nguyên văn tin rao: giá, diện tích, vị trí..."></textarea><br><button>Thêm</button>
+</fieldset></form>

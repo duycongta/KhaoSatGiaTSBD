@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+openpyxl
+jinja2
+python-multipart
+pytest
+httpx
