@@ -110,7 +110,7 @@ async def import_html(request: Request, files: list[UploadFile] = File(...), onl
         raw = (await f.read()).decode("utf-8", errors="replace")
         kind, items = parse_saved_html(raw, only_land=bool(only_land))
         if not kind:
-            report.append((f.filename, "Không nhận diện được (hiện hỗ trợ trang kết quả của alonhadat.com.vn, batdongsan.com.vn)", 0))
+            report.append((f.filename, "Không nhận diện được (hỗ trợ: alonhadat, batdongsan, thuviennhadat, raobannhadat)", 0))
             continue
         store.save(items)
         report.append((f.filename, kind, len(items)))

@@ -50,7 +50,7 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #dde;padding:5p
 <td>{{l.price_vnd|vnd}}</td><td>{{l.price_per_m2|vnd}}</td><td>{{l.fetched_at}}</td></tr>{% endfor %}</table>
 {% endif %}
 
-<form method="post" action="/import-html" enctype="multipart/form-data"><fieldset><legend>Nhập trang kết quả tìm kiếm đã lưu (alonhadat, batdongsan)</legend>
+<form method="post" action="/import-html" enctype="multipart/form-data"><fieldset><legend>Nhập trang kết quả tìm kiếm đã lưu (alonhadat, batdongsan, thuviennhadat, raobannhadat)</legend>
 <p class="muted">Mở trang kết quả (đã lọc Bình Định/Gia Lai) trên trình duyệt → Ctrl+S → "Trang web, chỉ HTML" → chọn các file đã lưu ở đây. Lưu nhiều trang (trang 1, 2, 3…) để có nhiều tin.</p>
 <input type="file" name="files" accept=".html,.htm" multiple required>
 <label><input type="checkbox" name="only_land" value="1" checked> Chỉ lấy tin đất (bỏ nhà, căn hộ)</label> <button>Nhập</button>

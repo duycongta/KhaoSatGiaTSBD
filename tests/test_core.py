@@ -74,3 +74,23 @@ def test_import_alonhadat_bds():
     assert k == "batdongsan" and len(items) == 1
     assert items[0].price_vnd == 2.85e9 and items[0].area_m2 == 87.5 and "Quy Nhơn Bắc" in items[0].address
     assert parse_saved_html("<html></html>")[0] == ""
+
+TVN = """<a href="https://thuviennhadat.vn/ban-dat-phuong-quy-nhon-bac/ban-dat-90m-pst1.html" title="Bán đất 90m² mặt tiền 5m"><div class="KinhDoanhNhaDat-index-post-title"><h2>Bán đất</h2></div></a><div></div>"""
+TVN = """<div class="w"><a href="https://thuviennhadat.vn/ban-dat-phuong-quy-nhon-bac/ban-dat-90m-pst1.html" title="Bán đất 90m² mặt tiền 5m"><div class="KinhDoanhNhaDat-index-post-title"><h2>Bán đất</h2></div>
+<div class="KinhDoanhNhaDat-index-unit-container"><div class="highlight"> 2,1 tỷ </div><div class="highlight"> 90 m² </div></div>
+<span class="KinhDoanhNhaDat-index-post-address"> Quy Nhơn, Bình Định </span></a><div class="KinhDoanhNhaDat-index-post-footer"><span class="post-date"> Đăng hôm nay </span></div></div>
+<div class="w"><a href="https://thuviennhadat.vn/ban-can-ho-chung-cu-x/ch-pst2.html" title="Căn hộ"><div class="KinhDoanhNhaDat-index-post-title"><h2>Căn hộ</h2></div></a></div>"""
+RBN = """<article class="listing-card " data-listing-id="1"><div class="listing-card__body"><h3 class="listing-card__title">
+<a href="https://raobannhadat.vn/chi-tiet-tin/ban-dat-xa-nhon-binh-thanh-pho-quy-nhon-binh-dinh-co-so-do-2">Bán đất xã Nhơn Bình</a></h3>
+<div class="listing-card__meta"><span class="price">750 triệu</span><span class="area">180 m²</span></div><p class="listing-card__addr"> Gia Lai </p>
+<div class="listing-card__foot"><span class="time">2 tháng trước</span></div></div></article>
+<article class="listing-card "><div class="listing-card__body"><h3 class="listing-card__title"><a href="https://raobannhadat.vn/chi-tiet-tin/q-terra-view-bien">Q'TERRA đất vàng</a></h3></div></article>"""
+
+def test_import_thuvien_raoban():
+    from app.sources.htmlimport import parse_saved_html
+    k, items = parse_saved_html(TVN)
+    assert k == "thuviennhadat" and len(items) == 1
+    assert items[0].price_vnd == 2.1e9 and items[0].area_m2 == 90 and "quy nhon bac" in items[0].address.lower().replace("ơ","o").replace("ắ","a")
+    k, items = parse_saved_html(RBN)
+    assert k == "raobannhadat" and len(items) == 1
+    assert items[0].price_vnd == 750e6 and items[0].area_m2 == 180 and "nhon binh" in items[0].address and "chi tiet" not in items[0].address
