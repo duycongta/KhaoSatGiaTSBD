@@ -43,3 +43,9 @@ def test_stats_warning_and_outlier():
     many = summarize([L(p * 1e8, 100, t=str(p)) for p in (10, 11, 12, 10, 11, 100)])
     assert len(many.outliers) == 1 and many.n_used == 5
     assert many.low < many.p25
+
+def test_street_rank():
+    from app.search import same_street, rank
+    a = L(1e9, 100, "Đường Nguyễn Huệ, Quy Nhơn", "a"); b = L(1e9, 100, "Đường Lê Lợi, Quy Nhơn", "b")
+    assert same_street(a, "Nguyễn Huệ") and same_street(a, "đường nguyễn huệ") and not same_street(b, "Nguyễn Huệ")
+    assert rank([b, a], "Nguyễn Huệ", 100)[0] is a

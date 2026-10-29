@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from . import store
-from .search import build_keywords, location_terms, filter_listings
+from .search import build_keywords, location_terms, filter_listings, same_street, rank
 from .sources import SOURCES, parse_manual_text
 from .stats import summarize
 from .textnorm import AdminMap
@@ -25,27 +25,35 @@ def evaluate(q: dict):
     groups = location_terms(admin, q["xa"], q["huyen"], q["tinh"])
     items = filter_listings(store.load_all(), groups, need=q["need"], area=q["area"] or None,
                             land_type=q["land_type"])
-    items.sort(key=lambda l: l.price_per_m2 or 0)
-    return items, summarize(items, discount=q["discount"] / 100)
+    items = rank(items, q["duong"], q["area"] or None)
+    ss = [l for l in items if q["duong"] and same_street(l, q["duong"])]
+    d = q["discount"] / 100
+    if len(ss) >= 3:   # đủ tin cùng đường: ưu tiên làm cơ sở tính
+        res, basis = summarize(ss, discount=d), "street"
+    else:
+        res, basis = summarize(items, discount=d), "area"
+    return items, res, ss, basis
 
-def qdict(xa, huyen, tinh, area, land_type, discount, need):
-    return dict(xa=xa.strip(), huyen=huyen.strip(), tinh=tinh.strip(), area=area or 0,
+def qdict(xa, huyen, tinh, area, land_type, discount, need, duong=""):
+    return dict(duong=duong.strip(), xa=xa.strip(), huyen=huyen.strip(), tinh=tinh.strip(), area=area or 0,
                 land_type=land_type, discount=discount, need=need)
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     return tpl.TemplateResponse(request, "index.html", dict(land=LAND, q=None, items=None, res=None,
-                                aliases=None, errors=[], sources=list(SOURCES)))
+                                aliases=None, errors=[], ss=[], basis="", sources=list(SOURCES)))
 
 @app.post("/search", response_class=HTMLResponse)
-def search(request: Request, xa: str = Form(""), huyen: str = Form(""), tinh: str = Form("Gia Lai"),
+def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: str = Form(""), tinh: str = Form("Gia Lai"),
            area: float = Form(0), land_type: str = Form(""), discount: float = Form(10),
            need: int = Form(1), live: str = Form("")):
-    q = qdict(xa, huyen, tinh, area, land_type, discount, need)
+    q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong)
     errors = []
     if live:
         # từ khoá tìm: dùng cả tên cũ và mới của xã/huyện để không bỏ sót
         kws = {build_keywords(xa, huyen, tinh)}
+        if duong.strip():
+            kws.add(build_keywords(duong, xa, tinh))
         for a in admin.aliases(xa) | admin.aliases(huyen):
             kws.add(a)
         for name, src in SOURCES.items():
@@ -54,10 +62,10 @@ def search(request: Request, xa: str = Form(""), huyen: str = Form(""), tinh: st
                     store.save(src.search(kw, limit=40))
                 except Exception as e:
                     errors.append(f"Nguồn {name} (từ khoá '{kw}'): {e}")
-    items, res = evaluate(q)
+    items, res, ss, basis = evaluate(q)
     shown = [sorted(admin.aliases(x)) for x in (xa, huyen) if x.strip()]
     return tpl.TemplateResponse(request, "index.html", dict(land=LAND, q=q, items=items, res=res,
-                                aliases=shown, errors=errors, sources=list(SOURCES)))
+                                aliases=shown, errors=errors, ss=ss, basis=basis, sources=list(SOURCES)))
 
 @app.post("/paste", response_class=HTMLResponse)
 def paste(request: Request, text: str = Form(...), url: str = Form(""), address: str = Form("")):
@@ -66,10 +74,10 @@ def paste(request: Request, text: str = Form(...), url: str = Form(""), address:
     return tpl.TemplateResponse(request, "pasted.html", dict(l=l))
 
 @app.get("/export.xlsx")
-def export(xa: str = "", huyen: str = "", tinh: str = "Gia Lai", area: float = 0, land_type: str = "",
+def export(duong: str = "", xa: str = "", huyen: str = "", tinh: str = "Gia Lai", area: float = 0, land_type: str = "",
            discount: float = 10, need: int = 1):
-    q = qdict(xa, huyen, tinh, area, land_type, discount, need)
-    items, res = evaluate(q)
-    data = to_xlsx(q, items, res)
+    q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong)
+    items, res, ss, basis = evaluate(q)
+    data = to_xlsx(q, items, res, ss)
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     headers={"Content-Disposition": "attachment; filename=khao-gia.xlsx"})

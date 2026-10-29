@@ -7,6 +7,25 @@ def location_terms(admin: AdminMap, xa: str, huyen: str, tinh: str):
 def build_keywords(xa: str, huyen: str, tinh: str) -> str:
     return " ".join(x for x in (xa, huyen, tinh) if x.strip())
 
+def street_core(street: str) -> str:
+    n = norm(street)
+    for p in ("duong", "pho", "dg", "hem", "kiet"):
+        if n.startswith(p + " "):
+            n = n[len(p) + 1:]
+    return n
+
+def same_street(l: Listing, street: str) -> bool:
+    c = street_core(street)
+    return bool(c) and contains_phrase(norm(l.address + " " + l.title + " " + l.description), c)
+
+def rank(items, street="", area=None):
+    """Cùng đường lên trước; sau đó diện tích gần với tài sản cần định giá."""
+    def key(l):
+        s = 0 if (street and same_street(l, street)) else 1
+        d = abs(l.area_m2 - area) / area if (area and l.area_m2) else 9
+        return (s, d)
+    return sorted(items, key=key)
+
 def matches_location(l: Listing, groups: list[set[str]], need: int) -> bool:
     """Tin phải khớp ít nhất `need` cấp (xã/huyện/tỉnh), mỗi cấp khớp bất kỳ tên cũ hoặc mới."""
     hay = norm(l.address + " " + l.title + " " + l.description)
