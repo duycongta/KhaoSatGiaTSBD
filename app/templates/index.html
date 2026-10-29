@@ -19,6 +19,7 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #dde;padding:5p
 <label>Diện tích m² <input name="area" type="number" step="any" value="{{ q.area if q else '' }}"></label>
 <label>Loại đất <select name="land_type">{% for k,v in land.items() %}<option value="{{k}}" {{'selected' if q and q.land_type==k}}>{{v}}</option>{% endfor %}</select></label>
 <label>Chiết khấu thương lượng % <input name="discount" type="number" step="any" value="{{ q.discount if q else 10 }}" style="width:60px"></label>
+<label>Sai lệch diện tích ± <input name="tol" type="number" min="0" value="{{ q.tol if q else 50 }}" style="width:55px">%</label>
 <label>Khớp tối thiểu <select name="need"><option value="1">1 cấp địa danh</option><option value="2" {{'selected' if q and q.need==2}}>2 cấp</option></select></label><br>
 <label>Tin đăng trong <input name="months" type="number" min="0" value="{{ q.months if q else 12 }}" style="width:55px"> tháng gần nhất (0 = không giới hạn)</label>
 <label>Thu thập tối đa <input name="maxn" type="number" min="20" step="20" value="{{ q.maxn if q else 200 }}" style="width:65px"> tin/từ khoá</label><br>
@@ -28,6 +29,9 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #dde;padding:5p
 
 {% for e in errors %}<div class="err">{{ e }}</div>{% endfor %}
 {% if res %}
+<details open class="box"><summary><b>Vì sao ra ít/nhiều tin (phễu lọc)</b></summary>
+{% for l in q.fetchlog %}<div>Thu thập: {{ l }}</div>{% endfor %}
+{% for name,n in q.funnel %}<div>{{ name }}: <b>{{ n }}</b></div>{% endfor %}</details>
 {% if aliases %}<p class="muted">Tên địa danh được tìm (gồm tên cũ/mới theo bảng ánh xạ): {% for a in aliases %}{{ a|join(' / ') }}{{ '; ' if not loop.last }}{% endfor %}</p>{% endif %}
 {% if q.duong %}<div class="{{ 'box' if basis=='street' else 'warn' }}">
 {% if basis=='street' %}Giá tính dựa trên <b>{{ ss|length }} tin cùng đường "{{ q.duong }}"</b> (các tin khác trong khu vực vẫn liệt kê bên dưới để đối chiếu).
@@ -38,7 +42,7 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #dde;padding:5p
 <b>Khoảng giá tham khảo sau chiết khấu {{ q.discount }}%: {{ res.low|vnd }} – {{ res.high|vnd }} đ/m²</b>
 {% if q.area %}→ ước tính thửa {{ q.area|vnd }} m²: {{ (res.low*q.area)|vnd }} – {{ (res.high*q.area)|vnd }} đ{% endif %}<br>
 <span class="muted">Dùng {{ res.n_used }} / {{ res.n_total }} tin (loại {{ res.outliers|length }} tin ngoại lai).</span>
-<a href="/export.xlsx?duong={{q.duong}}&xa={{q.xa}}&huyen={{q.huyen}}&tinh={{q.tinh}}&area={{q.area}}&land_type={{q.land_type}}&discount={{q.discount}}&need={{q.need}}&months={{q.months}}">Tải Excel</a></div>{% endif %}
+<a href="/export.xlsx?duong={{q.duong}}&xa={{q.xa}}&huyen={{q.huyen}}&tinh={{q.tinh}}&area={{q.area}}&land_type={{q.land_type}}&discount={{q.discount}}&need={{q.need}}&months={{q.months}}&tol={{q.tol}}">Tải Excel</a></div>{% endif %}
 <table><tr><th>Nguồn</th><th>Tiêu đề / link</th><th>Địa chỉ</th><th>Loại</th><th>m²</th><th>MT</th><th>Giá</th><th>Giá/m²</th><th>Thu thập</th></tr>
 {% for l in items %}{% set o = l in res.outliers %}<tr class="{{ 'out' if o }}"><td>{% if l in ss %}★ {% endif %}{{l.source}}</td>
 <td>{% if l.url %}<a href="{{l.url}}" target="_blank" rel="noopener">{{ l.title or l.url }}</a>{% else %}{{ l.title }}{% endif %}</td>
