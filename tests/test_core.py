@@ -112,3 +112,26 @@ def test_webscrape_pages_and_block(monkeypatch):
     monkeypatch.setattr(ws.requests, "get", lambda *a, **k: R(403, ""))
     log = []; assert ws.Alonhadat().fetch_area("Bình Định", 100, None, log) == [] and "chặn" in log[0]
     assert ws.slugs_for("Gia Lai") == ["gia-lai", "binh-dinh"]
+
+def test_google_source(monkeypatch):
+    import app.sources.googlesearch as g
+    monkeypatch.setenv("GOOGLE_API_KEY", "k"); monkeypatch.setenv("GOOGLE_CSE_ID", "c"); monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    class R:
+        status_code = 200
+        def raise_for_status(s): pass
+        def json(s): return {"items": [
+            {"title": "Bán đất đường Bạch Đằng Quy Nhơn 100m2 giá 3,2 tỷ", "snippet": "Sổ hồng riêng", "link": "https://x/1"},
+            {"title": "Cho thuê đất Bạch Đằng 5 triệu/tháng", "snippet": "", "link": "https://x/2"},
+            {"title": "Tin tức thị trường đất Quy Nhơn", "snippet": "không có giá", "link": "https://x/3"}]}
+    monkeypatch.setattr(g.requests, "get", lambda *a, **k: R()); monkeypatch.setattr(g.time, "sleep", lambda x: None)
+    log = []
+    got = g.GoogleSearch().fetch_queries(g.build_queries("Bạch Đằng", "Quy Nhơn", "", "Bình Định"), 10, log)
+    assert [l.url for l in got][:1] == ["https://x/1"] and got[0].price_vnd == 3.2e9 and got[0].area_m2 == 100
+    assert all(l.url != "https://x/2" and l.url != "https://x/3" for l in got)
+    monkeypatch.delenv("GOOGLE_API_KEY"); log = []
+    assert g.GoogleSearch().fetch_queries(["q"], 10, log) == [] and "chưa cấu hình" in log[0]
+
+def test_ai_verification():
+    from app.sources.googlesearch import _verify_ai
+    v = _verify_ai({"price_vnd": 3.2e9, "area_m2": 999, "is_for_sale": True}, "Bán đất 100m2 giá 3,2 tỷ")
+    assert v["price_vnd"] == 3.2e9 and "area_m2" not in v      # diện tích 999 không có trong văn bản -> bỏ

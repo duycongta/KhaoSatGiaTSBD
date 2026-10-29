@@ -8,6 +8,7 @@ from . import store
 from .search import build_keywords, location_terms, filter_listings, same_street, rank
 from .sources import SOURCES, parse_manual_text
 from .sources.htmlimport import parse_saved_html
+from .sources.googlesearch import build_queries
 from .stats import summarize
 from .textnorm import AdminMap
 from .export import to_xlsx
@@ -82,6 +83,11 @@ def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: s
         for name, source in SOURCES.items():
             if name not in chosen:
                 continue
+            if getattr(source, "query_search", False):
+                try:
+                    store.save(source.fetch_queries(build_queries(duong, xa, huyen, tinh, land_type), maxn, q["fetchlog"]))
+                except Exception as e:
+                    errors.append(f"Nguồn {name}: {e}")
             if hasattr(source, "fetch_area"):
                 try:
                     store.save(source.fetch_area(tinh or "Gia Lai", maxn, 30 * months or None, q["fetchlog"]))
