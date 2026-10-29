@@ -23,7 +23,8 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #dde;padding:5p
 <label>Khớp tối thiểu <select name="need"><option value="1">1 cấp địa danh</option><option value="2" {{'selected' if q and q.need==2}}>2 cấp</option></select></label><br>
 <label>Tin đăng trong <input name="months" type="number" min="0" value="{{ q.months if q else 12 }}" style="width:55px"> tháng gần nhất (0 = không giới hạn)</label>
 <label>Thu thập tối đa <input name="maxn" type="number" min="20" step="20" value="{{ q.maxn if q else 200 }}" style="width:65px"> tin/từ khoá</label><br>
-<label><input type="checkbox" name="live" value="1"> Thu thập mới từ nguồn trực tuyến ({{ sources|join(', ') }}) trước khi tính</label>
+<label><input type="checkbox" name="live" value="1"> Thu thập mới từ nguồn trực tuyến trước khi tính (có thể mất vài phút)</label><br>
+<span class="muted">Nguồn:</span> {% for s in sources %}<label><input type="checkbox" name="src" value="{{s}}" checked> {{s}}</label>{% endfor %}
 <button>Khảo giá</button>
 </fieldset></form>
 

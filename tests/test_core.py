@@ -94,3 +94,21 @@ def test_import_thuvien_raoban():
     k, items = parse_saved_html(RBN)
     assert k == "raobannhadat" and len(items) == 1
     assert items[0].price_vnd == 750e6 and items[0].area_m2 == 180 and "nhon binh" in items[0].address and "chi tiet" not in items[0].address
+
+def test_webscrape_pages_and_block(monkeypatch):
+    import app.sources.webscrape as ws
+    class R:
+        def __init__(s, code, text): s.status_code, s.text = code, text
+        def raise_for_status(s): pass
+    calls = []
+    def fake(url, headers=None, timeout=None):
+        calls.append(url)
+        if "trang-2" in url: return R(200, "<html></html>")       # hết tin -> dừng
+        return R(200, ALO)
+    monkeypatch.setattr(ws.requests, "get", fake); monkeypatch.setattr(ws.time, "sleep", lambda x: None)
+    log = []
+    got = ws.Alonhadat().fetch_area("Bình Định", 100, None, log)
+    assert len(got) == 1 and calls[0].endswith("/can-ban-nha-dat/binh-dinh") and calls[1].endswith("/trang-2")
+    monkeypatch.setattr(ws.requests, "get", lambda *a, **k: R(403, ""))
+    log = []; assert ws.Alonhadat().fetch_area("Bình Định", 100, None, log) == [] and "chặn" in log[0]
+    assert ws.slugs_for("Gia Lai") == ["gia-lai", "binh-dinh"]

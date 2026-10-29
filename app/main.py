@@ -61,7 +61,7 @@ def index(request: Request):
 @app.post("/search", response_class=HTMLResponse)
 def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: str = Form(""), tinh: str = Form("Gia Lai"),
            area: float = Form(0), land_type: str = Form(""), discount: float = Form(10),
-           need: int = Form(1), live: str = Form(""),
+           need: int = Form(1), live: str = Form(""), src: list[str] = Form([]),
            months: int = Form(12), maxn: int = Form(200), tol: float = Form(50)):
     q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong, months, tol)
     q["maxn"] = maxn
@@ -78,13 +78,23 @@ def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: s
             kws.add(f"{duong.strip()} {xa.strip() or huyen.strip()}".strip())
         for a in admin.aliases(xa) | admin.aliases(huyen):
             kws.add(a)
-        for name, src in SOURCES.items():
-            if hasattr(src, "discover_regions"):
+        chosen = set(src) if src else set(SOURCES)
+        for name, source in SOURCES.items():
+            if name not in chosen:
+                continue
+            if hasattr(source, "fetch_area"):
+                try:
+                    store.save(source.fetch_area(tinh or "Gia Lai", maxn, 30 * months or None, q["fetchlog"]))
+                except Exception as e:
+                    errors.append(f"Nguồn {name}: {e}")
+            if not source.keyword_search:
+                continue
+            if hasattr(source, "discover_regions"):
                 # Lọc theo khu vực (đầy đủ hơn tìm theo từ khoá, vì nhiều tin không ghi địa danh trong tiêu đề)
                 try:
-                    regs = src.discover_regions([x for x in (xa, huyen, tinh) if x.strip()])
+                    regs = source.discover_regions([x for x in (xa, huyen, tinh) if x.strip()])
                     for code, rname in regs.items():
-                        got = src.search_region(code, limit=maxn, max_age_days=30 * months or None)
+                        got = source.search_region(code, limit=maxn, max_age_days=30 * months or None)
                         store.save(got)
                         q["fetchlog"].append(f"{name} · toàn bộ đất khu vực '{rname}' (mã {code}): lấy về {len(got)} tin")
                     if not regs:
@@ -93,7 +103,7 @@ def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: s
                     errors.append(f"Nguồn {name} (lọc khu vực): {e}")
             for kw in kws:
                 try:
-                    got = src.search(kw, limit=maxn, max_age_days=30 * months or None)
+                    got = source.search(kw, limit=maxn, max_age_days=30 * months or None)
                     store.save(got)
                     q["fetchlog"].append(f"{name} · '{kw}': lấy về {len(got)} tin")
                 except Exception as e:
