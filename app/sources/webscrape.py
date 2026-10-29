@@ -8,6 +8,7 @@ import datetime as dt, math, time
 import requests
 from .base import Source
 from ..models import Listing
+from ..parse import guess_kind
 from . import htmlimport as hi
 
 HEADERS = {
@@ -63,14 +64,16 @@ class WebSource(Source):
                         log.append(f"{self.name}: lỗi {e} — {url}"); stop = True; break
                     allr = self.parser(html, only_land=False)
                     got_cards += len(allr)
-                    land = self.parser(html, only_land=True)
+                    for l in allr:
+                        l.kind = guess_kind(l.url, l.title)
+                    land = allr
                     if cutoff and allr and all(l.posted_at and l.posted_at < cutoff for l in allr if l.posted_at):
                         stop = True
                     out.extend(land); n_slug += len(land)
                     time.sleep(self.min_delay)
                 if stop or got_cards == 0:
                     break
-            log.append(f"{self.name} · '{slug}': lấy về {n_slug} tin đất")
+            log.append(f"{self.name} · '{slug}': lấy về {n_slug} tin")
         return out
 
 class Alonhadat(WebSource):
@@ -85,9 +88,7 @@ class Batdongsan(WebSource):
     parser = staticmethod(hi.parse_batdongsan)
     min_delay = 3.0
     def page_urls(self, slug, page):
-        # mục "đất" riêng (suy ra từ cấu trúc địa chỉ các tỉnh khác) cho nhiều tin đất hơn mục nhà đất chung
-        suffix = "" if page == 1 else f"/p{page}"
-        return [f"https://batdongsan.com.vn/ban-dat-{slug}{suffix}", f"https://batdongsan.com.vn/ban-dat-nen-du-an-{slug}{suffix}"]
+        return [f"https://batdongsan.com.vn/nha-dat-ban-{slug}" + ("" if page == 1 else f"/p{page}")]
 
 class Thuviennhadat(WebSource):
     name = "thuviennhadat"
@@ -103,4 +104,4 @@ class Raobannhadat(WebSource):
         pid = self.PROVINCE_ID.get(slug)
         if pid is None or slug == "binh-dinh":      # tránh lấy trùng: Bình Định đã nằm trong Gia Lai (23)
             return []
-        return [f"https://raobannhadat.vn/danh-sach-tin?type=ban&category=ban-dat&province={pid}&page={page}"]
+        return [f"https://raobannhadat.vn/danh-sach-tin?type=ban&category=&province={pid}&page={page}"]

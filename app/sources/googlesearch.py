@@ -11,7 +11,7 @@ import datetime as dt, json, os, re, time
 import requests
 from .base import Source
 from ..models import Listing
-from ..parse import parse_price, parse_area, parse_frontage, guess_land_type
+from ..parse import parse_price, parse_area, parse_frontage, guess_land_type, guess_kind
 from ..textnorm import norm
 
 CSE_API = "https://www.googleapis.com/customsearch/v1"
@@ -21,7 +21,7 @@ LAND_WORDS = {"ONT": "đất thổ cư", "ODT": "đất ở đô thị", "CLN": 
 
 def build_queries(duong: str, xa: str, huyen: str, tinh: str, land_type: str = "") -> list[str]:
     where = " ".join(x.strip() for x in (duong, xa, huyen) if x.strip())
-    what = LAND_WORDS.get(land_type, "đất")
+    what = LAND_WORDS.get(land_type, "nhà đất")
     base = f"bán {what} {where} {tinh}".strip()
     return [base, f"{base} site:facebook.com", f"{base} giá m2 sổ đỏ"]
 
@@ -113,7 +113,7 @@ class GoogleSearch(Source):
                         continue
                     out.append(Listing(
                         source=f"google{' (AI)' if how == 'ai' else ''}", url=url, title=title, address="", description=snip,
-                        price_vnd=price, area_m2=area, frontage_m=front, land_type=ltype, posted_at="", fetched_at=now,
+                        price_vnd=price, area_m2=area, frontage_m=front, land_type=ltype, kind=guess_kind(url, title), posted_at="", fetched_at=now,
                         raw={"query": q, "extract": how, "snippet": snip, "displayLink": it.get("displayLink", "")}))
                     got += 1
                 if len(items) < 10:

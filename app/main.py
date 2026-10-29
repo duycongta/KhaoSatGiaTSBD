@@ -1,14 +1,14 @@
 import datetime as dt
 from pathlib import Path
-from fastapi import FastAPI, Request, Form, File, UploadFile
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from . import store
 from .search import build_keywords, location_terms, filter_listings, same_street, rank
 from .sources import SOURCES, parse_manual_text
-from .sources.htmlimport import parse_saved_html
 from .sources.googlesearch import build_queries
+from .parse import KIND_LABEL
 from .stats import summarize
 from .textnorm import AdminMap
 from .export import to_xlsx
@@ -23,6 +23,7 @@ LAND = {"": "Tất cả", "ONT": "Đất ở nông thôn (ONT)", "ODT": "Đất 
 def fmt(v):
     return f"{v:,.0f}".replace(",", ".") if v else "-"
 tpl.env.filters["vnd"] = fmt
+tpl.env.globals["KIND_LABEL"] = KIND_LABEL
 
 def recent(items, months):
     """Bỏ tin đăng quá `months` tháng (0 = không giới hạn). Tin không rõ ngày đăng vẫn giữ."""
@@ -37,7 +38,7 @@ def evaluate(q: dict):
     rec = recent(allr, q["months"])
     loc = filter_listings(rec, groups, need=q["need"])
     items = filter_listings(rec, groups, need=q["need"], area=q["area"] or None, tol=q["tol"] / 100,
-                            land_type=q["land_type"])
+                            land_type=q["land_type"], kind=q["kind"])
     q["funnel"] = [("Tổng số tin đã lưu trong máy", len(allr)), (f"Còn lại sau lọc thời gian ({q['months']} tháng)", len(rec)),
                    ("Còn lại sau lọc địa danh", len(loc)),
                    (f"Còn lại sau lọc diện tích (±{q['tol']:.0f}%) và loại đất", len(items))]
@@ -50,9 +51,9 @@ def evaluate(q: dict):
         res, basis = summarize(items, discount=d), "area"
     return items, res, ss, basis
 
-def qdict(xa, huyen, tinh, area, land_type, discount, need, duong="", months=0, tol=50):
+def qdict(xa, huyen, tinh, area, land_type, discount, need, duong="", months=0, tol=50, kind=""):
     return dict(tol=tol, months=months, duong=duong.strip(), xa=xa.strip(), huyen=huyen.strip(), tinh=tinh.strip(), area=area or 0,
-                land_type=land_type, discount=discount, need=need)
+                land_type=land_type, discount=discount, need=need, kind=kind)
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
@@ -63,8 +64,8 @@ def index(request: Request):
 def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: str = Form(""), tinh: str = Form("Gia Lai"),
            area: float = Form(0), land_type: str = Form(""), discount: float = Form(10),
            need: int = Form(1), live: str = Form(""), src: list[str] = Form([]),
-           months: int = Form(12), maxn: int = Form(200), tol: float = Form(50)):
-    q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong, months, tol)
+           months: int = Form(12), maxn: int = Form(200), tol: float = Form(50), kind: str = Form("")):
+    q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong, months, tol, kind)
     q["maxn"] = maxn
     q["fetchlog"] = []
     errors = []
@@ -119,19 +120,6 @@ def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: s
     return tpl.TemplateResponse(request, "index.html", dict(land=LAND, q=q, items=items, res=res,
                                 aliases=shown, errors=errors, ss=ss, basis=basis, sources=list(SOURCES)))
 
-@app.post("/import-html", response_class=HTMLResponse)
-async def import_html(request: Request, files: list[UploadFile] = File(...), only_land: str = Form("1")):
-    report = []
-    for f in files:
-        raw = (await f.read()).decode("utf-8", errors="replace")
-        kind, items = parse_saved_html(raw, only_land=bool(only_land))
-        if not kind:
-            report.append((f.filename, "Không nhận diện được (hỗ trợ: alonhadat, batdongsan, thuviennhadat, raobannhadat)", 0))
-            continue
-        store.save(items)
-        report.append((f.filename, kind, len(items)))
-    return tpl.TemplateResponse(request, "imported.html", dict(report=report))
-
 @app.post("/paste", response_class=HTMLResponse)
 def paste(request: Request, text: str = Form(...), url: str = Form(""), address: str = Form("")):
     l = parse_manual_text(text, url=url, address=address)
@@ -139,9 +127,9 @@ def paste(request: Request, text: str = Form(...), url: str = Form(""), address:
     return tpl.TemplateResponse(request, "pasted.html", dict(l=l))
 
 @app.get("/export.xlsx")
-def export(duong: str = "", xa: str = "", huyen: str = "", tinh: str = "Gia Lai", area: float = 0, land_type: str = "",
+def export(duong: str = "", xa: str = "", huyen: str = "", tinh: str = "Gia Lai", area: float = 0, land_type: str = "", kind: str = "",
            discount: float = 10, need: int = 1, months: int = 12, tol: float = 50):
-    q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong, months, tol)
+    q = qdict(xa, huyen, tinh, area, land_type, discount, need, duong, months, tol, kind)
     items, res, ss, basis = evaluate(q)
     data = to_xlsx(q, items, res, ss)
     return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

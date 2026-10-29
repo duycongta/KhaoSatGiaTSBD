@@ -32,12 +32,14 @@ def matches_location(l: Listing, groups: list[set[str]], need: int) -> bool:
     hits = sum(any(contains_phrase(hay, a) for a in g) for g in groups)
     return hits >= min(need, len(groups))
 
-def filter_listings(items, groups, need=1, area=None, tol=0.5, land_type="", frontage_min=None):
+def filter_listings(items, groups, need=1, area=None, tol=0.5, land_type="", frontage_min=None, kind=""):
     out = []
     for l in items:
         if groups and not matches_location(l, groups, need):
             continue
         if area and l.area_m2 and not (area * (1 - tol) <= l.area_m2 <= area * (1 + tol)):
+            continue
+        if kind and l.kind and l.kind != kind:
             continue
         if land_type and l.land_type and l.land_type != land_type:
             continue

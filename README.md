@@ -9,7 +9,7 @@ Công cụ HỖ TRỢ khảo giá từ tin rao bán; kết quả chỉ để tha
 
 ## Dùng
 - Nhập xã/huyện/tỉnh (tên cũ HOẶC mới đều được), diện tích, loại đất → "Khảo giá".
-- Tích "Thu thập mới" để app tự lấy tin từ: Chợ Tốt/Nhà Tốt (API), alonhadat, batdongsan, thuviennhadat, raobannhadat (mở trang kết quả theo tỉnh). Các trang web có thể chặn truy cập tự động: lỗi được ghi ở khung "phễu lọc". Nếu bị chặn, dùng ô "Nhập trang kết quả đã lưu" (Ctrl+S). Kết quả lưu SQLite (`data/khaogia.sqlite`).
+- Tích "Thu thập mới" để app tự lấy tin từ: Chợ Tốt/Nhà Tốt (API), alonhadat, batdongsan, thuviennhadat, raobannhadat (mở trang kết quả theo tỉnh). Các trang web có thể chặn truy cập tự động: lỗi được ghi ở khung "phễu lọc". Nếu một nguồn bị chặn, bỏ tích nguồn đó và dùng các nguồn còn lại hoặc ô "Thêm tin thủ công". Kết quả lưu SQLite (`data/khaogia.sqlite`).
 - Tin Facebook/Zalo: dán nội dung vào ô cuối trang, app tự trích giá/diện tích/loại đất; kiểm tra lại số trước khi dùng.
 - Xuất Excel có link nguồn, thời điểm thu thập, đánh dấu tin ngoại lai.
 

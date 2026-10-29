@@ -7,7 +7,7 @@ import datetime as dt, re
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 from ..models import Listing
-from ..parse import parse_price, parse_area, parse_frontage, guess_land_type
+from ..parse import parse_price, parse_area, parse_frontage, guess_land_type, guess_kind
 from ..textnorm import norm
 
 NOT_LAND = re.compile(r"(^|-)(nha|can-ho|chung-cu|biet-thu|villa|shophouse|nha-rieng|van-phong|cho-thue)(-|$)")
@@ -50,7 +50,7 @@ def detect(html: str) -> str:
         return "raobannhadat"
     return ""
 
-def parse_alonhadat(html: str, only_land=True) -> list[Listing]:
+def parse_alonhadat(html: str, only_land=False) -> list[Listing]:
     soup = BeautifulSoup(html, "html.parser")
     now = dt.datetime.now().isoformat(timespec="seconds")
     out = []
@@ -92,7 +92,7 @@ def _bds_posted(txt: str, today: dt.date) -> str:
     m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", txt)
     return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}" if m else ""
 
-def parse_batdongsan(html: str, base="https://batdongsan.com.vn", only_land=True) -> list[Listing]:
+def parse_batdongsan(html: str, base="https://batdongsan.com.vn", only_land=False) -> list[Listing]:
     soup = BeautifulSoup(html, "html.parser")
     now = dt.datetime.now(); today = now.date(); now_s = now.isoformat(timespec="seconds")
     out = []
@@ -125,7 +125,7 @@ def _slug_words(url: str, level: int | None = None) -> str:
     parts = path.split("/")
     return " ".join(p.replace("-", " ") for p in (parts if level is None else parts[:level]))
 
-def parse_thuviennhadat(html: str, base="https://thuviennhadat.vn", only_land=True) -> list[Listing]:
+def parse_thuviennhadat(html: str, base="https://thuviennhadat.vn", only_land=False) -> list[Listing]:
     soup = BeautifulSoup(html, "html.parser")
     now = dt.datetime.now(); today = now.date(); now_s = now.isoformat(timespec="seconds")
     out = []
@@ -152,7 +152,7 @@ def parse_thuviennhadat(html: str, base="https://thuviennhadat.vn", only_land=Tr
             raw={"title": title, "price_text": price_txt, "area_text": area_txt, "location": loc}))
     return out
 
-def parse_raobannhadat(html: str, base="https://raobannhadat.vn", only_land=True) -> list[Listing]:
+def parse_raobannhadat(html: str, base="https://raobannhadat.vn", only_land=False) -> list[Listing]:
     soup = BeautifulSoup(html, "html.parser")
     now = dt.datetime.now(); today = now.date(); now_s = now.isoformat(timespec="seconds")
     out = []
@@ -177,8 +177,14 @@ def parse_raobannhadat(html: str, base="https://raobannhadat.vn", only_land=True
                  "price_per_m2_text": _txt(c.select_one(".ppm"))}))
     return out
 
-def parse_saved_html(html: str, only_land=True) -> tuple[str, list[Listing]]:
+def parse_saved_html(html: str, only_land=False) -> tuple[str, list[Listing]]:
     kind = detect(html)
+    kind_, items = _dispatch(kind, html, only_land)
+    for l in items:
+        l.kind = guess_kind(l.url, l.title)
+    return kind_, items
+
+def _dispatch(kind, html, only_land):
     if kind == "alonhadat":
         return kind, parse_alonhadat(html, only_land)
     if kind == "batdongsan":

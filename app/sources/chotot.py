@@ -8,11 +8,11 @@ import datetime as dt, time
 import requests
 from .base import Source
 from ..models import Listing
-from ..parse import parse_frontage, guess_land_type
+from ..parse import parse_frontage, guess_land_type, guess_kind
 from ..textnorm import norm
 
 API = "https://gateway.chotot.com/v1/public/ad-listing"
-CATEGORY_LAND = 1040      # danh mục "Đất"
+CATEGORY_LAND = 1000      # 1000 = toàn bộ BĐS (1040 đất, 1020 nhà ở, 1010 căn hộ)
 HEADERS = {"User-Agent": "Mozilla/5.0 (khaogia-tham-dinh)", "Accept": "application/json"}
 
 def _to_listing(a: dict, source: str, now: str) -> Listing:
@@ -25,10 +25,11 @@ def _to_listing(a: dict, source: str, now: str) -> Listing:
     if a.get("list_time"):
         posted = dt.datetime.fromtimestamp(a["list_time"] / 1000).isoformat(timespec="seconds")
     return Listing(
-        source=source, url=f"https://www.nhatot.com/mua-ban-dat/{a.get('list_id')}.htm",
+        source=source, url=f"https://www.nhatot.com/{a.get('list_id')}.htm",
         title=a.get("subject", ""), address=addr, description=a.get("body", "") or "",
         price_vnd=a.get("price"), area_m2=a.get("size") or a.get("land_area"),
         frontage_m=parse_frontage(text), land_type=guess_land_type(text),
+        kind={1040: "dat", 1020: "nha", 1010: "can_ho"}.get(a.get("category")) or guess_kind("", a.get("subject", "") or ""),
         posted_at=posted, fetched_at=now, raw=a)
 
 class Chotot(Source):

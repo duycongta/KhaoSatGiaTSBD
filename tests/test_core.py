@@ -66,12 +66,12 @@ BDS = """<div class="js__card js__card-full-web"><a class="js__product-link-for-
 def test_import_alonhadat_bds():
     from app.sources.htmlimport import parse_saved_html
     k, items = parse_saved_html(ALO)
-    assert k == "alonhadat" and len(items) == 1
+    assert k == "alonhadat" and len(items) == 2 and [x.kind for x in items] == ["dat", "nha"]
     l = items[0]
     assert l.price_vnd == 30550000000 and l.area_m2 == 470 and l.frontage_m == 10
     assert "Bình Định" in l.address and "Gia Lai" in l.address and l.posted_at == "2026-10-29"
     k, items = parse_saved_html(BDS)
-    assert k == "batdongsan" and len(items) == 1
+    assert k == "batdongsan" and len(items) == 2 and items[1].kind == "can_ho"
     assert items[0].price_vnd == 2.85e9 and items[0].area_m2 == 87.5 and "Quy Nhơn Bắc" in items[0].address
     assert parse_saved_html("<html></html>")[0] == ""
 
@@ -89,10 +89,10 @@ RBN = """<article class="listing-card " data-listing-id="1"><div class="listing-
 def test_import_thuvien_raoban():
     from app.sources.htmlimport import parse_saved_html
     k, items = parse_saved_html(TVN)
-    assert k == "thuviennhadat" and len(items) == 1
+    assert k == "thuviennhadat" and len(items) == 2 and items[1].kind == "can_ho"
     assert items[0].price_vnd == 2.1e9 and items[0].area_m2 == 90 and "quy nhon bac" in items[0].address.lower().replace("ơ","o").replace("ắ","a")
     k, items = parse_saved_html(RBN)
-    assert k == "raobannhadat" and len(items) == 1
+    assert k == "raobannhadat" and len(items) == 2
     assert items[0].price_vnd == 750e6 and items[0].area_m2 == 180 and "nhon binh" in items[0].address and "chi tiet" not in items[0].address
 
 def test_webscrape_pages_and_block(monkeypatch):
@@ -108,7 +108,7 @@ def test_webscrape_pages_and_block(monkeypatch):
     monkeypatch.setattr(ws.requests, "get", fake); monkeypatch.setattr(ws.time, "sleep", lambda x: None)
     log = []
     got = ws.Alonhadat().fetch_area("Bình Định", 100, None, log)
-    assert len(got) == 1 and calls[0].endswith("/can-ban-nha-dat/binh-dinh") and calls[1].endswith("/trang-2")
+    assert len(got) == 2 and calls[0].endswith("/can-ban-nha-dat/binh-dinh") and calls[1].endswith("/trang-2")
     monkeypatch.setattr(ws.requests, "get", lambda *a, **k: R(403, ""))
     log = []; assert ws.Alonhadat().fetch_area("Bình Định", 100, None, log) == [] and "chặn" in log[0]
     assert ws.slugs_for("Gia Lai") == ["gia-lai", "binh-dinh"]
@@ -135,3 +135,14 @@ def test_ai_verification():
     from app.sources.googlesearch import _verify_ai
     v = _verify_ai({"price_vnd": 3.2e9, "area_m2": 999, "is_for_sale": True}, "Bán đất 100m2 giá 3,2 tỷ")
     assert v["price_vnd"] == 3.2e9 and "area_m2" not in v      # diện tích 999 không có trong văn bản -> bỏ
+
+
+def test_kind_and_filter():
+    from app.parse import guess_kind
+    assert guess_kind("https://x/ban-dat-nen-du-an-abc/p-pr1", "") == "dat"
+    assert guess_kind("https://x/ban-can-ho-chung-cu-q/ch-pr1", "") == "can_ho"
+    assert guess_kind("https://x/ban-nha-rieng-duong-a/x-pr1", "") == "nha"
+    assert guess_kind("", "Bán nhà 2 tầng hẻm Bạch Đằng") == "nha"
+    a, b = L(1e9, 100, t="a"), L(3e9, 100, t="b"); a.kind, b.kind = "dat", "nha"
+    out = filter_listings([a, b], [], kind="dat")
+    assert out == [a]

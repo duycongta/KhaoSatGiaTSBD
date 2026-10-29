@@ -59,3 +59,19 @@ def guess_land_type(text: str) -> str:
             if re.search(rf"(?<![a-z0-9]){re.escape(k)}(?![a-z0-9])", t):
                 return code
     return ""
+
+
+KIND_LABEL = {"dat": "Đất", "nha": "Nhà", "can_ho": "Căn hộ"}
+
+def guess_kind(url: str = "", title: str = "") -> str:
+    """Phân loại tài sản theo đường dẫn (ưu tiên) rồi tiêu đề: can_ho / nha / dat / '' (không rõ)."""
+    path = norm(url.split("//")[-1].split("/", 1)[-1].replace("-", " ").replace("/", " "))
+    t = norm(title)
+    for text in (path, t):
+        if re.search(r"\b(can ho|chung cu|condotel|penthouse|duplex)\b", text) or re.search(r"\b\d+\s*(pn|phong ngu)\b", text):
+            return "can_ho"
+        if re.search(r"\b(nha rieng|nha mat|nha pho|nha cap|nha tro|biet thu|shophouse|lien ke|nha hem|nha \d|ban nha)\b", text):
+            return "nha"
+        if re.search(r"\b(ban dat|lo dat|dat nen|dat tho cu|dat o|dat vuon|dat rung|dat nong|dat trong)\b", text):
+            return "dat"
+    return ""

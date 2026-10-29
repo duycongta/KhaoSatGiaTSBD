@@ -11,6 +11,7 @@ class Listing:
     price_vnd: Optional[float] = None
     area_m2: Optional[float] = None
     frontage_m: Optional[float] = None
+    kind: str = ""               # dat / nha / can_ho (loại tài sản)
     land_type: str = ""          # ONT / CLN / LUC / RSX ... hoặc văn bản tự do
     posted_at: str = ""          # ISO
     fetched_at: str = ""         # ISO
