@@ -17,10 +17,14 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (khaogia-tham-dinh)", "Accept": "applicati
 class Chotot(Source):
     name = "chotot"
 
-    def search(self, keywords: str, limit: int = 50) -> list[Listing]:
+    def search(self, keywords: str, limit: int = 50, max_age_days: int | None = None) -> list[Listing]:
+        """Phân trang lùi dần theo thời gian (API trả tin mới nhất trước) cho tới khi đủ `limit`,
+        hết tin, hoặc gặp tin cũ hơn `max_age_days`."""
         out, offset = [], 0
-        while len(out) < limit:
-            params = {"cg": CATEGORY_LAND, "q": keywords, "limit": min(20, limit - len(out)),
+        cutoff = (dt.datetime.now() - dt.timedelta(days=max_age_days)).timestamp() * 1000 if max_age_days else None
+        stop = False
+        while len(out) < limit and not stop:
+            params = {"cg": CATEGORY_LAND, "q": keywords, "limit": 20,
                       "o": offset, "st": "s"}   # st=s: tin bán
             r = requests.get(API, params=params, headers=HEADERS, timeout=20)
             r.raise_for_status()
@@ -29,6 +33,9 @@ class Chotot(Source):
                 break
             now = dt.datetime.now().isoformat(timespec="seconds")
             for a in ads:
+                if cutoff and a.get("list_time") and a["list_time"] < cutoff:
+                    stop = True
+                    break
                 addr = ", ".join(x for x in (a.get("street_name"), a.get("ward_name"),
                                              a.get("area_name"), a.get("region_name")) if x)
                 body = a.get("body", "") or ""

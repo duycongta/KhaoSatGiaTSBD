@@ -13,6 +13,7 @@ def _conn():
 
 def save(listings: list[Listing]):
     with _conn() as c:
+        c.executemany("DELETE FROM listing WHERE url=? AND url!=''", [(l.url,) for l in listings])
         c.executemany("INSERT INTO listing(source,url,fetched_at,data) VALUES(?,?,?,?)",
                       [(l.source, l.url, l.fetched_at, json.dumps(l.to_dict(), ensure_ascii=False)) for l in listings])
 
