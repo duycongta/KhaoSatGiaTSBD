@@ -1,12 +1,13 @@
 import datetime as dt
 from pathlib import Path
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from . import store
 from .search import build_keywords, location_terms, filter_listings, same_street, rank
 from .sources import SOURCES, parse_manual_text
+from .sources.htmlimport import parse_saved_html
 from .stats import summarize
 from .textnorm import AdminMap
 from .export import to_xlsx
@@ -101,6 +102,19 @@ def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: s
     shown = [sorted(admin.aliases(x)) for x in (xa, huyen) if x.strip()]
     return tpl.TemplateResponse(request, "index.html", dict(land=LAND, q=q, items=items, res=res,
                                 aliases=shown, errors=errors, ss=ss, basis=basis, sources=list(SOURCES)))
+
+@app.post("/import-html", response_class=HTMLResponse)
+async def import_html(request: Request, files: list[UploadFile] = File(...), only_land: str = Form("1")):
+    report = []
+    for f in files:
+        raw = (await f.read()).decode("utf-8", errors="replace")
+        kind, items = parse_saved_html(raw, only_land=bool(only_land))
+        if not kind:
+            report.append((f.filename, "Không nhận diện được (hiện hỗ trợ trang kết quả của alonhadat.com.vn, batdongsan.com.vn)", 0))
+            continue
+        store.save(items)
+        report.append((f.filename, kind, len(items)))
+    return tpl.TemplateResponse(request, "imported.html", dict(report=report))
 
 @app.post("/paste", response_class=HTMLResponse)
 def paste(request: Request, text: str = Form(...), url: str = Form(""), address: str = Form("")):

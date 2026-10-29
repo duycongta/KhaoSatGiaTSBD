@@ -12,6 +12,10 @@ def _conn():
     return c
 
 def save(listings: list[Listing]):
+    uniq = {}
+    for l in listings:                       # trong cùng một lô, tin trùng link chỉ giữ một bản
+        uniq[l.url or id(l)] = l
+    listings = list(uniq.values())
     with _conn() as c:
         c.executemany("DELETE FROM listing WHERE url=? AND url!=''", [(l.url,) for l in listings])
         c.executemany("INSERT INTO listing(source,url,fetched_at,data) VALUES(?,?,?,?)",

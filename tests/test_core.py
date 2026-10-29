@@ -49,3 +49,28 @@ def test_street_rank():
     a = L(1e9, 100, "Đường Nguyễn Huệ, Quy Nhơn", "a"); b = L(1e9, 100, "Đường Lê Lợi, Quy Nhơn", "b")
     assert same_street(a, "Nguyễn Huệ") and same_street(a, "đường nguyễn huệ") and not same_street(b, "Nguyễn Huệ")
     assert rank([b, a], "Nguyễn Huệ", 100)[0] is a
+
+ALO = """<article class="property-item"><a class="link vip" href="https://alonhadat.com.vn/chinh-chu-ban-dat-mat-bien-xa-nhon-ly-tp-quy-nhon-binh-dinh-18961528.html">
+<h3 class="property-title">CHÍNH CHỦ BÁN ĐẤT MẶT BIỂN XÃ NHƠN LÝ</h3></a><time class="created-date" datetime="2026-10-29" itemprop="datePosted">Hôm nay</time>
+<p class="brief">Mặt tiền 10m. Đất ở</p>
+<span class="price"><span itemprop="price" content="30550000000">65 triệu /&nbsp;m²</span></span>
+<span class="area" itemprop="floorSize"><span itemprop="value">470</span> <span itemprop="unitText">m²</span></span>
+<p class="new-address"><span itemprop="streetAddress">Đường D1</span>, <span itemprop="addressLocality">Phường Quy Nhơn Đông</span>, <span itemprop="addressRegion">Gia Lai</span></p>
+<p class="old-address"><span>Đường D1, Phường Quy Nhơn Đông, Thành phố Quy Nhơn, Bình Định</span> (cũ)</p></article>
+<article class="property-item"><a class="link" href="https://alonhadat.com.vn/ban-nha-255-nguyen-hue-1.html"><h3 class="property-title">BÁN NHÀ 255 NGUYỄN HUỆ</h3></a></article>"""
+BDS = """<div class="js__card js__card-full-web"><a class="js__product-link-for-product-id" href="https://batdongsan.com.vn/ban-dat-phuong-nhon-phu-1/ban-dat-87m-pr46481823">
+<div class="re__card-title">BÁN ĐẤT KHU DÂN CƯ 87,5M²</div><span class="re__card-config-price">2,85 tỷ</span><span class="re__card-config-area">87,5 m²</span>
+<div class="re__card-location">TP. Quy Nhơn (P. Quy Nhơn Bắc mới)</div><span class="re__card-published-info-published-at">Đăng hôm nay</span></a></div>
+<div class="js__card"><a class="js__product-link-for-product-id" href="https://batdongsan.com.vn/ban-can-ho-chung-cu-x/ch-pr1"><div class="re__card-title">Căn hộ 2PN</div></a></div>"""
+
+def test_import_alonhadat_bds():
+    from app.sources.htmlimport import parse_saved_html
+    k, items = parse_saved_html(ALO)
+    assert k == "alonhadat" and len(items) == 1
+    l = items[0]
+    assert l.price_vnd == 30550000000 and l.area_m2 == 470 and l.frontage_m == 10
+    assert "Bình Định" in l.address and "Gia Lai" in l.address and l.posted_at == "2026-10-29"
+    k, items = parse_saved_html(BDS)
+    assert k == "batdongsan" and len(items) == 1
+    assert items[0].price_vnd == 2.85e9 and items[0].area_m2 == 87.5 and "Quy Nhơn Bắc" in items[0].address
+    assert parse_saved_html("<html></html>")[0] == ""
