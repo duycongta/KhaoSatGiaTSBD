@@ -1,13 +1,14 @@
-"""Nguồn "Tìm qua Google": Google Programmable Search (API chính thức) -> lấy tiêu đề + đoạn trích có link thật
+"""Nguồn "Tìm qua Google": gửi truy vấn tới dịch vụ tìm kiếm -> lấy tiêu đề + đoạn trích có link thật
 -> trích giá/diện tích bằng regex; tuỳ chọn dùng AI (Claude) cho các kết quả regex không đọc được.
 
-Cấu hình bằng biến môi trường:
-  GOOGLE_API_KEY, GOOGLE_CSE_ID     bắt buộc (tạo ở Google Cloud + programmablesearchengine.google.com,
-                                    chọn "Search the entire web"). Miễn phí ~100 truy vấn/ngày.
+Nhà cung cấp tìm kiếm (biến môi trường):
+  SERPER_API_KEY                    Serper.dev (khuyên dùng; trả kết quả như Google). Đăng ký tại serper.dev.
+  GOOGLE_API_KEY + GOOGLE_CSE_ID    Google Custom Search (cũ; đã đóng với khách hàng mới, ngừng hẳn 01/01/2027).
+  SEARCH_PROVIDER                   "serper" hoặc "cse" để ép chọn; mặc định: serper nếu có SERPER_API_KEY.
   ANTHROPIC_API_KEY                 tuỳ chọn: bật trích xuất bằng AI. ANTHROPIC_MODEL mặc định claude-haiku-5-5.
-Lưu ý: chỉ đọc tiêu đề/đoạn trích Google trả về, không mở trang đích. Kết quả AI được đánh dấu "(AI)" để kiểm tra lại.
+Chỉ đọc tiêu đề/đoạn trích do dịch vụ trả về, không mở trang đích. Kết quả AI được đánh dấu "(AI)" để kiểm tra lại.
 """
-import datetime as dt, json, os, re, time
+import datetime as dt, json, math, os, re, time
 import requests
 from .base import Source
 from ..models import Listing
@@ -15,6 +16,7 @@ from ..parse import parse_price, parse_area, parse_frontage, guess_land_type, gu
 from ..textnorm import norm
 
 CSE_API = "https://www.googleapis.com/customsearch/v1"
+SERPER_API = "https://google.serper.dev/search"
 ANTHROPIC_API = "https://api.anthropic.com/v1/messages"
 LAND_WORDS = {"ONT": "đất thổ cư", "ODT": "đất ở đô thị", "CLN": "đất vườn cây lâu năm", "BHK": "đất trồng cây hàng năm",
               "RSX": "đất rừng sản xuất", "NTS": "đất nuôi trồng thuỷ sản", "NN": "đất nông nghiệp"}
@@ -60,34 +62,65 @@ def _verify_ai(d: dict, text: str) -> dict:
     out["is_for_sale"] = d.get("is_for_sale", True) is not False
     return out
 
+class Quota(Exception):
+    pass
+
 class GoogleSearch(Source):
     name = "google"
     keyword_search = False
     query_search = True
 
+    @staticmethod
+    def provider() -> str:
+        forced = os.environ.get("SEARCH_PROVIDER", "").lower()
+        if forced in ("serper", "cse"):
+            return forced
+        if os.environ.get("SERPER_API_KEY"):
+            return "serper"
+        if os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"):
+            return "cse"
+        return ""
+
     def configured(self) -> bool:
-        return bool(os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID"))
+        p = self.provider()
+        return (p == "serper" and bool(os.environ.get("SERPER_API_KEY"))) or \
+               (p == "cse" and bool(os.environ.get("GOOGLE_API_KEY") and os.environ.get("GOOGLE_CSE_ID")))
+
+    def _page(self, q: str, page: int) -> list[dict]:
+        """Một trang ~10 kết quả -> [{title, link, snippet, displayLink}]. Ném Quota khi hết hạn mức/khoá sai."""
+        if self.provider() == "serper":
+            r = requests.post(SERPER_API, timeout=25, headers={"X-API-KEY": os.environ["SERPER_API_KEY"], "Content-Type": "application/json"},
+                              json={"q": q, "gl": "vn", "hl": "vi", "num": 10, "page": page})
+            if r.status_code in (401, 403, 429):
+                raise Quota(f"Serper HTTP {r.status_code}: {r.text[:150]} (khoá sai hoặc hết hạn mức)")
+            r.raise_for_status()
+            return [{"title": x.get("title", ""), "link": x.get("link", ""), "snippet": x.get("snippet", ""),
+                     "displayLink": x.get("link", "").split("/")[2] if "//" in x.get("link", "") else ""}
+                    for x in r.json().get("organic", [])]
+        r = requests.get(CSE_API, params={"key": os.environ["GOOGLE_API_KEY"], "cx": os.environ["GOOGLE_CSE_ID"], "q": q, "num": 10,
+                                          "start": (page - 1) * 10 + 1, "hl": "vi", "lr": "lang_vi"}, timeout=25)
+        if r.status_code in (403, 429):
+            raise Quota(f"Google CSE HTTP {r.status_code}: {r.json().get('error', {}).get('message', 'hết hạn mức hoặc khoá sai')}")
+        r.raise_for_status()
+        return r.json().get("items", [])
 
     def fetch_queries(self, queries: list[str], limit: int, log: list[str]) -> list[Listing]:
         if not self.configured():
-            log.append("google: chưa cấu hình GOOGLE_API_KEY / GOOGLE_CSE_ID (xem README) — bỏ qua nguồn này")
+            log.append("google: chưa cấu hình SERPER_API_KEY (xem README) — bỏ qua nguồn này")
             return []
         out, ai_used, calls = [], 0, 0
         now = dt.datetime.now().isoformat(timespec="seconds")
         for q in queries:
             got = 0
-            for start in range(1, min(limit, 30) + 1, 10):   # API: tối đa 10 kết quả/lần, 100 kết quả/truy vấn
+            for page in range(1, min(math.ceil(limit / 10), 3) + 1):   # tối đa 3 trang/truy vấn để tiết kiệm hạn mức
                 try:
-                    r = requests.get(CSE_API, params={"key": os.environ["GOOGLE_API_KEY"], "cx": os.environ["GOOGLE_CSE_ID"],
-                                                      "q": q, "num": 10, "start": start, "hl": "vi", "lr": "lang_vi"}, timeout=25)
+                    items = self._page(q, page)
                     calls += 1
-                    if r.status_code in (403, 429):
-                        log.append(f"google: HTTP {r.status_code} — {r.json().get('error', {}).get('message', 'hết hạn mức hoặc khoá sai')}")
-                        return out
-                    r.raise_for_status()
+                except Quota as e:
+                    log.append(f"google: {e}")
+                    return out
                 except Exception as e:
                     log.append(f"google · '{q}': lỗi {e}"); break
-                items = r.json().get("items", [])
                 for it in items:
                     title, snip, url = it.get("title", ""), (it.get("snippet", "") or "").replace("\n", " "), it.get("link", "")
                     text = f"{title}. {snip}"

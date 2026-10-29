@@ -115,20 +115,28 @@ def test_webscrape_pages_and_block(monkeypatch):
 
 def test_google_source(monkeypatch):
     import app.sources.googlesearch as g
-    monkeypatch.setenv("GOOGLE_API_KEY", "k"); monkeypatch.setenv("GOOGLE_CSE_ID", "c"); monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("SERPER_API_KEY", "k"); monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("SEARCH_PROVIDER", raising=False); monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    sent = {}
     class R:
         status_code = 200
+        text = ""
         def raise_for_status(s): pass
-        def json(s): return {"items": [
+        def json(s): return {"organic": [
             {"title": "Bán đất đường Bạch Đằng Quy Nhơn 100m2 giá 3,2 tỷ", "snippet": "Sổ hồng riêng", "link": "https://x/1"},
             {"title": "Cho thuê đất Bạch Đằng 5 triệu/tháng", "snippet": "", "link": "https://x/2"},
             {"title": "Tin tức thị trường đất Quy Nhơn", "snippet": "không có giá", "link": "https://x/3"}]}
-    monkeypatch.setattr(g.requests, "get", lambda *a, **k: R()); monkeypatch.setattr(g.time, "sleep", lambda x: None)
+    def fake_post(url, headers=None, json=None, timeout=None):
+        sent.update(url=url, key=headers["X-API-KEY"], q=json["q"], gl=json["gl"]); return R()
+    monkeypatch.setattr(g.requests, "post", fake_post); monkeypatch.setattr(g.time, "sleep", lambda x: None)
     log = []
     got = g.GoogleSearch().fetch_queries(g.build_queries("Bạch Đằng", "Quy Nhơn", "", "Bình Định"), 10, log)
-    assert [l.url for l in got][:1] == ["https://x/1"] and got[0].price_vnd == 3.2e9 and got[0].area_m2 == 100
-    assert all(l.url != "https://x/2" and l.url != "https://x/3" for l in got)
-    monkeypatch.delenv("GOOGLE_API_KEY"); log = []
+    assert sent["url"].startswith("https://google.serper.dev") and sent["key"] == "k" and sent["gl"] == "vn"
+    assert got[0].url == "https://x/1" and got[0].price_vnd == 3.2e9 and got[0].area_m2 == 100
+    assert all(l.url not in ("https://x/2", "https://x/3") for l in got)
+    monkeypatch.setattr(g.requests, "post", lambda *a, **k: type("Q", (), {"status_code": 401, "text": "bad key"})())
+    log = []; assert g.GoogleSearch().fetch_queries(["q"], 10, log) == [] and "khoá sai" in log[0]
+    monkeypatch.delenv("SERPER_API_KEY"); log = []
     assert g.GoogleSearch().fetch_queries(["q"], 10, log) == [] and "chưa cấu hình" in log[0]
 
 def test_ai_verification():
