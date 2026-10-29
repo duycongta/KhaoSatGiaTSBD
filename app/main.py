@@ -78,6 +78,18 @@ def search(request: Request, duong: str = Form(""), xa: str = Form(""), huyen: s
         for a in admin.aliases(xa) | admin.aliases(huyen):
             kws.add(a)
         for name, src in SOURCES.items():
+            if hasattr(src, "discover_regions"):
+                # Lọc theo khu vực (đầy đủ hơn tìm theo từ khoá, vì nhiều tin không ghi địa danh trong tiêu đề)
+                try:
+                    regs = src.discover_regions([x for x in (xa, huyen, tinh) if x.strip()])
+                    for code, rname in regs.items():
+                        got = src.search_region(code, limit=maxn, max_age_days=30 * months or None)
+                        store.save(got)
+                        q["fetchlog"].append(f"{name} · toàn bộ đất khu vực '{rname}' (mã {code}): lấy về {len(got)} tin")
+                    if not regs:
+                        q["fetchlog"].append(f"{name}: không xác định được mã khu vực từ địa danh đã nhập")
+                except Exception as e:
+                    errors.append(f"Nguồn {name} (lọc khu vực): {e}")
             for kw in kws:
                 try:
                     got = src.search(kw, limit=maxn, max_age_days=30 * months or None)
